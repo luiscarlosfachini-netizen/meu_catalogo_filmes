@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:csv/csv.dart';
 
 void main() {
   runApp(const MeuCatalogoApp());
@@ -32,16 +36,15 @@ class TelaPrincipal extends StatefulWidget {
 }
 
 class _TelaPrincipalState extends State<TelaPrincipal> {
-  // Listas separadas para organizar o catálogo
   final List<String> _filmes = [];
   final List<String> _series = [];
 
   final _tituloController = TextEditingController();
-  String _tipoSelecionado = 'Filme'; // Valor padrão inicial
+  String _tipoSelecionado = 'Filme';
 
   void _adicionarItem() {
     _tituloController.clear();
-    _tipoSelecionado = 'Filme'; // Reseta a seleção
+    _tipoSelecionado = 'Filme';
 
     showDialog(
       context: context,
@@ -113,14 +116,12 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                       setState(() {
                         if (_tipoSelecionado == 'Filme') {
                           _filmes.add(titulo);
-                          // Ordena em ordem alfabética (sem diferenciar maiúsculas/minúsculas)
                           _filmes.sort(
                             (a, b) =>
                                 a.toLowerCase().compareTo(b.toLowerCase()),
                           );
                         } else {
                           _series.add(titulo);
-                          // Ordena em ordem alfabética
                           _series.sort(
                             (a, b) =>
                                 a.toLowerCase().compareTo(b.toLowerCase()),
@@ -138,6 +139,75 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         );
       },
     );
+  }
+
+  // Função para importar arquivo em tabela (.csv)
+  Future<void> _importarTabela() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv', 'txt'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final input = File(result.files.single.path!).openRead();
+        final fields = await input
+            .transform(const CsvToListConverter(fieldDelimiter: ','))
+            .toList();
+
+        int adicionados = 0;
+
+        setState(() {
+          for (var row in fields) {
+            if (row.length >= 2) {
+              String nome = row[0].toString().trim();
+              String tipo = row[1].toString().trim().toLowerCase();
+
+              // Pula linha de cabeçalho (se houver)
+              if (nome.toLowerCase() == 'nome' ||
+                  nome.toLowerCase() == 'titulo') {
+                continue;
+              }
+
+              if (nome.isNotEmpty) {
+                if (tipo.contains('serie') ||
+                    tipo.contains('série') ||
+                    tipo == 'tv') {
+                  if (!_series.contains(nome)) {
+                    _series.add(nome);
+                    adicionados++;
+                  }
+                } else {
+                  if (!_filmes.contains(nome)) {
+                    _filmes.add(nome);
+                    adicionados++;
+                  }
+                }
+              }
+            }
+          }
+
+          _filmes.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          _series.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Sucesso! $adicionados itens importados.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Erro ao ler a tabela. Verifique o formato do arquivo.',
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Widget _construirLista(
@@ -189,6 +259,13 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         appBar: AppBar(
           title: const Text('🍿 Meus Filmes & Séries'),
           centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.file_upload_outlined),
+              tooltip: 'Importar Tabela (.csv)',
+              onPressed: _importarTabela,
+            ),
+          ],
           bottom: const TabBar(
             tabs: [
               Tab(icon: Icon(Icons.movie), text: 'Filmes'),
@@ -201,12 +278,12 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
             _construirLista(
               _filmes,
               Icons.movie,
-              'Nenhum filme cadastrado ainda!\nClique em + para adicionar.',
+              'Nenhum filme cadastrado ainda!\nClique em + para adicionar ou no ícone de importar.',
             ),
             _construirLista(
               _series,
               Icons.tv,
-              'Nenhuma série cadastrada ainda!\nClique em + para adicionar.',
+              'Nenhuma série cadastrada ainda!\nClique em + para adicionar ou no ícone de importar.',
             ),
           ],
         ),
