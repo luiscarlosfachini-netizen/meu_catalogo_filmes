@@ -141,7 +141,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
     );
   }
 
-  // Função para importar arquivo em tabela (.csv)
+  // Importar Tabela CSV (Corrigido)
   Future<void> _importarTabela() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -150,10 +150,10 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       );
 
       if (result != null && result.files.single.path != null) {
-        final input = File(result.files.single.path!).openRead();
-        final fields = await input
-            .transform(CsvToListConverter(fieldDelimiter: ','))
-            .toList();
+        final file = File(result.files.single.path!);
+        final content = await file.readAsString();
+        final fields = const CsvToListConverter(fieldDelimiter: ',')
+            .convert(content);
 
         int adicionados = 0;
 
@@ -163,11 +163,9 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
               String nome = row[0].toString().trim();
               String tipo = row[1].toString().trim().toLowerCase();
 
-              // Pula linha de cabeçalho (se houver)
               if (nome.toLowerCase() == 'nome' ||
-                  nome.toLowerCase() == 'titulo') {
+                  nome.toLowerCase() == 'titulo')
                 continue;
-              }
 
               if (nome.isNotEmpty) {
                 if (tipo.contains('serie') ||
@@ -199,12 +197,46 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Erro ao ler a tabela.')));
+      }
+    }
+  }
+
+  // Exportar Tabela CSV
+  Future<void> _exportarTabela() async {
+    try {
+      List<List<dynamic>> rows = [
+        ["Nome", "Tipo"],
+      ];
+
+      for (var f in _filmes) {
+        rows.add([f, "Filme"]);
+      }
+      for (var s in _series) {
+        rows.add([s, "Série"]);
+      }
+
+      String csvData = const ListToCsvConverter().convert(rows);
+
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+
+      if (selectedDirectory != null) {
+        final filePath = "$selectedDirectory/meu_catalogo.csv";
+        final file = File(filePath);
+        await file.writeAsString(csvData);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Salvo com sucesso em: $filePath')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Erro ao ler a tabela. Verifique o formato do arquivo.',
-            ),
-          ),
+          const SnackBar(content: Text('Erro ao exportar a tabela.')),
         );
       }
     }
@@ -260,10 +292,33 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           title: const Text('🍿 Meus Filmes & Séries'),
           centerTitle: true,
           actions: [
-            IconButton(
-              icon: const Icon(Icons.file_upload_outlined),
-              tooltip: 'Importar Tabela (.csv)',
-              onPressed: _importarTabela,
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'importar') _importarTabela();
+                if (value == 'exportar') _exportarTabela();
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'importar',
+                  child: Row(
+                    children: [
+                      Icon(Icons.file_upload_outlined),
+                      SizedBox(width: 8),
+                      Text('Importar (.csv)'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'exportar',
+                  child: Row(
+                    children: [
+                      Icon(Icons.file_download_outlined),
+                      SizedBox(width: 8),
+                      Text('Exportar (.csv)'),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
           bottom: const TabBar(
@@ -278,12 +333,12 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
             _construirLista(
               _filmes,
               Icons.movie,
-              'Nenhum filme cadastrado ainda!\nClique em + para adicionar ou no ícone de importar.',
+              'Nenhum filme cadastrado ainda!',
             ),
             _construirLista(
               _series,
               Icons.tv,
-              'Nenhuma série cadastrada ainda!\nClique em + para adicionar ou no ícone de importar.',
+              'Nenhuma série cadastrada ainda!',
             ),
           ],
         ),
