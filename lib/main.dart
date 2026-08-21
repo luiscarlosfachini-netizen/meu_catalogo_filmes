@@ -152,7 +152,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       if (result != null && result.files.single.path != null) {
         final input = File(result.files.single.path!).openRead();
         final fields = await input
-            .transform(const CsvToListConverter(fieldDelimiter: ','))
+            .transform(CsvToListConverter(fieldDelimiter: ','))
             .toList();
 
         int adicionados = 0;
